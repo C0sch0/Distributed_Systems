@@ -49,9 +49,10 @@ func Map_Select(datos [][]string) []Covid {
 
 func Map_Projection(datos [][]string, col_pedidas []string) [][]string {
 	filtered := [][]string{}
+
   for _, dato := range datos{
+    //fmt.Println(dato)
     new_line := []string{}
-    //fmt.Println(filtered)
   	for _, word := range col_pedidas {
       if word == "Region" {
         new_line = append(new_line, dato[0])
@@ -79,6 +80,7 @@ func Map_Projection(datos [][]string, col_pedidas []string) [][]string {
   }
 
   //fmt.Println(filtered)
+
   return filtered
 }
 
@@ -319,7 +321,7 @@ func main() {
 
     lists := make(chan [][]string)
     finalValue := make(chan [][]string)
-    var wg sync.WaitGroup
+    // var wg sync.WaitGroup
     //wg.Add(len(lines))
 
 
@@ -334,7 +336,9 @@ func main() {
       inputs_projection = append(inputs_projection, COL_N)
     }
 
+    //fmt.Println(lines[1 * (len(lines) / 2):])
     for counter := 0; counter < numThreads; counter++ {
+      //fmt.Println("Hola")
       if counter == numThreads - 1 {
         go func(datos [][]string){
           defer wg.Done()
@@ -347,7 +351,7 @@ func main() {
           defer wg.Done()
           //fmt.Println(datos)
           lists <- Map_Projection(datos, inputs_projection)
-        }(lines[1 + (counter * (len(lines) - 1 / numThreads)) : 1 + ((counter + 1) * (len(lines) - 1 / numThreads))])
+        }(lines[counter * (len(lines) / numThreads) : (counter + 1) * (len(lines) / numThreads)])
       }
     }
 
