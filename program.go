@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -22,8 +21,13 @@ type Covid struct {
 }
 
 //func readCsvFile(filePath string) [][]string {
-
 //}
+
+func checkError(message string, err error) {
+    if err != nil {
+        log.Fatal(message, err)
+    }
+}
 
 
 func Map_Select(datos [][]string) []Covid {
@@ -51,7 +55,6 @@ func Map_Projection(datos [][]string, col_pedidas []string) [][]string {
 	filtered := [][]string{}
 
   for _, dato := range datos{
-    //fmt.Println(dato)
     new_line := []string{}
   	for _, word := range col_pedidas {
       if word == "Region" {
@@ -79,10 +82,144 @@ func Map_Projection(datos [][]string, col_pedidas []string) [][]string {
     filtered = append(filtered, new_line)
   }
 
-  //fmt.Println(filtered)
-
   return filtered
 }
+
+
+func Reduce_GA(mapList chan map[string][]string, sendFinalValue chan map[string]float64, stdin_[]string){
+  reduccion := map[string]float64{}
+  operacion := stdin_[3]
+
+  if operacion == "AVG" {
+    for list := range mapList{
+      for key, value := range list{
+        var suma_total float64 = 0
+        for _, valor := range value{
+          cant, _ := strconv.ParseFloat(valor, 64)
+          suma_total = suma_total + cant
+        }
+        total_numeros := float64(len(value))
+        reduccion[key] = suma_total / total_numeros
+        //fmt.Println(reduccion[key])
+      }
+    }
+  }
+
+  if operacion == "MIN" {
+    for list := range mapList{
+      for key, value := range list{
+        var min_value float64
+        for _, valor := range value{
+          cant, _ := strconv.ParseFloat(valor, 64)
+          if cant < min_value {
+            min_value = cant
+          }
+        }
+        reduccion[key] = min_value
+        //fmt.Println(reduccion[key])
+      }
+    }
+  }
+
+  if operacion == "MAX" {
+    for list := range mapList{
+      for key, value := range list{
+        var max_value float64
+        for _, valor := range value{
+          cant, _ := strconv.ParseFloat(valor, 64)
+          if cant > max_value {
+            max_value = cant
+          }
+        }
+        reduccion[key] = max_value
+        //fmt.Println(reduccion[key])
+      }
+    }
+  }
+
+  if operacion == "SUM" {
+    for list := range mapList{
+      for key, value := range list{
+        var suma_tot float64
+        for _, valor := range value{
+          cant, _ := strconv.ParseFloat(valor, 64)
+          suma_tot = suma_tot + cant
+        }
+        reduccion[key] = suma_tot
+        //fmt.Println(reduccion[key])
+      }
+    }
+  }
+
+  sendFinalValue <- reduccion
+  //fmt.Println(reduccion)
+}
+
+
+func Map_GA(datos [][]string, col_pedidas []string) map[string][]string {
+  mapeo := map[string][]string{}
+
+  //fmt.Println(col_pedidas)
+  columna := col_pedidas[0]
+  posicion := 0
+  // Sacar columna para agrupar
+  if columna == "Region" {
+    posicion = 0
+  }
+  if columna == "Codigo region" {
+    posicion = 1
+  }
+  if columna == "Comuna" {
+    posicion = 2
+  }
+  if columna == "Codigo comuna" {
+    posicion = 3
+  }
+  if columna == "Poblacion" {
+    posicion = 4
+  }
+  if columna == "Fecha" {
+    posicion = 5
+  }
+  if columna == "Casos confirmados" {
+    posicion = 6
+  }
+
+  // Sacar columna para agregar
+  col_agregacion := col_pedidas[2]
+  posicion_2 := 0
+
+  if col_agregacion == "Region" {
+    posicion_2 = 0
+  }
+  if col_agregacion == "Codigo region" {
+    posicion_2 = 1
+  }
+  if col_agregacion == "Comuna" {
+    posicion_2 = 2
+  }
+  if col_agregacion == "Codigo comuna" {
+    posicion_2 = 3
+  }
+  if col_agregacion == "Poblacion" {
+    posicion_2 = 4
+  }
+  if col_agregacion == "Fecha" {
+    posicion_2 = 5
+  }
+  if col_agregacion == "Casos confirmados" {
+    posicion_2 = 6
+  }
+
+  //fmt.Println("mapeo")
+  for _, dato := range datos{
+    mapeo[dato[posicion]] = append(mapeo[dato[posicion]], dato[posicion_2])
+  }
+  //fmt.Println(mapeo)
+  return mapeo
+}
+
+
 
 func Reducer_Projection(mapList chan [][]string, sendFinalValue chan [][]string){
   filtered := [][]string{}
@@ -115,7 +252,6 @@ func Reducer_Projection(mapList chan [][]string, sendFinalValue chan [][]string)
 }
 
 func Reducer_Select(mapList chan []Covid, sendFinalValue chan []Covid, data []string){
-
   final := []Covid{}
 
   col_name := data[0]
@@ -242,7 +378,6 @@ func Reducer_Select(mapList chan []Covid, sendFinalValue chan []Covid, data []st
 func main() {
   numThreads_txt := os.Args[1]
   fmt.Println("Threads:", numThreads_txt)
-
   numThreads, _ := strconv.Atoi(numThreads_txt)
 
   // Read CSV
@@ -266,6 +401,7 @@ func main() {
   scanner.Scan()
   text := scanner.Text()
   var wg sync.WaitGroup
+
   wg.Add(numThreads)
 
   if text == "SELECT" {
@@ -291,7 +427,6 @@ func main() {
     }
 
     fmt.Print("Ha elegido SELECT. Indique Col_Name, Filtro y Valor \n")
-
     // Manejo de inputs
     inputs_select := make([]string, 0)
     scanner.Scan()
@@ -323,7 +458,6 @@ func main() {
     finalValue := make(chan [][]string)
     // var wg sync.WaitGroup
     //wg.Add(len(lines))
-
 
     inputs_projection := make([]string, 0)
     scanner.Scan()
@@ -359,12 +493,14 @@ func main() {
     wg.Wait()
     close(lists)
     fmt.Println(<-finalValue)
-
   }
 
   if text == "GROUP"{
     fmt.Print("Ha elegido GROUP. Indique COL_0 / AGGREGATE / COL_1 / FUNCTION\n")
-    //inputs_projection := make([]string, 0)
+    inputs_group := make([]string, 0)
+    lista_mapeo := make(chan map[string][]string)
+    finalValue := make(chan map[string]float64)
+
     scanner.Scan()
     COL_NAME_0 := scanner.Text()
 
@@ -377,11 +513,33 @@ func main() {
     scanner.Scan()
     FUNCTION := scanner.Text() // MIN, MAX,AVG,SUM.
 
+    inputs_group = append(inputs_group, COL_NAME_0)
+    inputs_group = append(inputs_group, AGGREGATE)
+    inputs_group = append(inputs_group, COL_NAME_1)
+    inputs_group = append(inputs_group, FUNCTION)
 
-    fmt.Println(COL_NAME_0)
-    fmt.Println(AGGREGATE)
-    fmt.Println(COL_NAME_1)
-    fmt.Println(FUNCTION)
+    //fmt.Println(lines[1 * (len(lines) / 2):])
+    for counter := 0; counter < numThreads; counter++ {
+      if counter == numThreads - 1 {
+        go func(datos [][]string){
+          defer wg.Done()
+          lista_mapeo <- Map_GA(datos, inputs_group)
+        }(lines[counter * (len(lines) / numThreads):])
+      }
+
+      if counter < numThreads - 1 {
+        go func(datos [][]string){
+          defer wg.Done()
+          //fmt.Println(datos)
+          lista_mapeo <- Map_GA(datos, inputs_group)
+        }(lines[counter * (len(lines) / numThreads) : (counter + 1) * (len(lines) / numThreads)])
+      }
+    }
+
+    go Reduce_GA(lista_mapeo, finalValue, inputs_group)
+    wg.Wait()
+    close(lista_mapeo)
+    // write csv
 
   }
 
@@ -406,11 +564,7 @@ func main() {
 //  }
 }
 
-func checkError(message string, err error) {
-    if err != nil {
-        log.Fatal(message, err)
-    }
-}
+
 
 // Read CSV borrowed from https://stackoverflow.com/questions/24999079/reading-csv-file-in-go
 // Read STDin from https://stackoverflow.com/questions/20895552/how-to-read-from-standard-input-in-the-console
