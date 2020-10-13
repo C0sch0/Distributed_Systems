@@ -29,6 +29,53 @@ func checkError(message string, err error) {
     }
 }
 
+func outputWriter_GA(final_result []<-chan map[string]float64){
+  var wg_ sync.WaitGroup
+  file, err := os.Create("result.csv")
+  checkError("Cannot create file", err)
+  defer file.Close()
+
+  writer := csv.NewWriter(file)
+  defer writer.Flush()
+
+  wg_.Add(1)
+  for i := 0; i < 1; i++{
+    go func(n int, c <-chan map[string]float64) {
+      for rows := range c {
+        for key, val := range rows{
+          _ = writer.Write([]string{key, fmt.Sprintf("%f", val)})
+        }
+      }
+      defer wg_.Done()
+    }(i, final_result[i])
+  }
+  wg_.Wait()
+}
+
+
+func outputWriter_Projection(final_result []<-chan [][]string){
+  var wg_ sync.WaitGroup
+  file, err := os.Create("result.csv")
+  checkError("Cannot create file", err)
+  defer file.Close()
+
+  writer := csv.NewWriter(file)
+  defer writer.Flush()
+
+  wg_.Add(1)
+  for i := 0; i < len(final_result); i++{
+    go func(n int, c <-chan [][]string) {
+      for rows := range c {
+        for _, row := range rows{
+          _ = writer.Write(row)
+        }
+      }
+      defer wg_.Done()
+    }(i, final_result[i])
+  }
+  wg_.Wait()
+}
+
 
 func Map_Select(datos [][]string) []Covid {
   list := []Covid{}
@@ -152,6 +199,8 @@ func Reduce_GA(mapList chan map[string][]string, sendFinalValue chan map[string]
   }
 
   sendFinalValue <- reduccion
+  close(sendFinalValue)
+  //wg.Done()
   //fmt.Println(reduccion)
 }
 
@@ -249,6 +298,7 @@ func Reducer_Projection(mapList chan [][]string, sendFinalValue chan [][]string)
   }
   //fmt.Println(filtered)
   sendFinalValue <- filtered
+  close(sendFinalValue)
 }
 
 func Reducer_Select(mapList chan []Covid, sendFinalValue chan []Covid, data []string){
@@ -373,6 +423,7 @@ func Reducer_Select(mapList chan []Covid, sendFinalValue chan []Covid, data []st
     }
   }
   sendFinalValue <- final
+  close(sendFinalValue)
 }
 
 func main() {
@@ -382,9 +433,7 @@ func main() {
 
   // Read CSV
   in, err := os.Open("./Covid-19_std.csv")
-  if err != nil {
-      panic(err)
-  }
+  if err != nil {panic(err)}
   defer in.Close()
 
   lines, err := csv.NewReader(in).ReadAll()
@@ -402,9 +451,10 @@ func main() {
   text := scanner.Text()
   var wg sync.WaitGroup
 
-  wg.Add(numThreads)
+
 
   if text == "SELECT" {
+    wg.Add(numThreads)
     // Crear canal
     lists := make(chan []Covid)
     finalValue := make(chan []Covid)
@@ -452,6 +502,7 @@ func main() {
   }
 
   if text == "PROJECTION"{
+    wg.Add(numThreads)
     fmt.Print("Ha elegido PROJECTION. Indique N_Columnas y las N Columnas\n")
 
     lists := make(chan [][]string)
@@ -492,10 +543,12 @@ func main() {
     go Reducer_Projection(lists, finalValue)
     wg.Wait()
     close(lists)
-    fmt.Println(<-finalValue)
+    outputWriter_Projection([]<-chan [][]string{finalValue})
+    //fmt.Println(<-finalValue)
   }
 
   if text == "GROUP"{
+    wg.Add(numThreads)
     fmt.Print("Ha elegido GROUP. Indique COL_0 / AGGREGATE / COL_1 / FUNCTION\n")
     inputs_group := make([]string, 0)
     lista_mapeo := make(chan map[string][]string)
@@ -530,19 +583,23 @@ func main() {
       if counter < numThreads - 1 {
         go func(datos [][]string){
           defer wg.Done()
-          //fmt.Println(datos)
           lista_mapeo <- Map_GA(datos, inputs_group)
         }(lines[counter * (len(lines) / numThreads) : (counter + 1) * (len(lines) / numThreads)])
       }
     }
 
     go Reduce_GA(lista_mapeo, finalValue, inputs_group)
+
     wg.Wait()
     close(lista_mapeo)
-    // write csv
-
+    outputWriter_GA([]<-chan map[string]float64{finalValue})
   }
 
+
+
+  //file, err := os.Create("result.csv")
+  //checkError("Cannot create file", err)
+  //defer file.Close()
 
 
 
@@ -563,6 +620,7 @@ func main() {
   //  checkError("Cannot write to file", err)
 //  }
 }
+
 
 
 
