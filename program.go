@@ -20,8 +20,6 @@ type Covid struct {
     Casos     float64 `csv:"Casos confirmados"`
 }
 
-//func readCsvFile(filePath string) [][]string {
-//}
 
 func checkError(message string, err error) {
     if err != nil {
@@ -52,6 +50,31 @@ func outputWriter_GA(final_result []<-chan map[string]float64){
   wg_.Wait()
 }
 
+
+func outputWriter_Selection(final_result []<- chan []Covid){
+  var wg_ sync.WaitGroup
+
+  file, err := os.Create("result.csv")
+  checkError("Cannot create file", err)
+  defer file.Close()
+
+  writer := csv.NewWriter(file)
+  defer writer.Flush()
+
+  wg_.Add(1)
+  for i := 0; i < 1; i++{
+    go func(n int, c <-chan []Covid) {
+      for rows := range c {
+        for _, row := range rows{
+          //fmt.Println(row)
+          _ = writer.Write([]string{row.Region, row.CodigoRegion, row.Comuna, row.CodigoComuna, strconv.FormatFloat(row.Poblacion, 'f', -1, 64), row.Fecha, strconv.FormatFloat(row.Casos, 'f', -1, 64)})
+        }
+      }
+      defer wg_.Done()
+    }(i, final_result[i])
+  }
+  wg_.Wait()
+}
 
 func outputWriter_Projection(final_result []<-chan [][]string){
   var wg_ sync.WaitGroup
@@ -128,7 +151,6 @@ func Map_Projection(datos [][]string, col_pedidas []string) [][]string {
   	}
     filtered = append(filtered, new_line)
   }
-
   return filtered
 }
 
@@ -337,7 +359,7 @@ func Reducer_Select(mapList chan []Covid, sendFinalValue chan []Covid, data []st
         }
 
         // --------------------------- Casos --------------------------------
-      case "Casos":
+      case "Casos confirmados":
         var Casos_Int int = int(value.Casos)
         filtro_int, _ := strconv.Atoi(filter_value)
         switch filter {
@@ -441,24 +463,17 @@ func main() {
     panic(err)
   }
 
-  // Create the Channel
-  //fmt.Println(records)
-  // Leer input de STDin
-
   scanner := bufio.NewScanner(os.Stdin)
-  fmt.Print("Comiense entregando instrucciones: \n")
+  fmt.Print("Comience entregando instrucciones: \n")
   scanner.Scan()
   text := scanner.Text()
   var wg sync.WaitGroup
-
-
 
   if text == "SELECT" {
     wg.Add(numThreads)
     // Crear canal
     lists := make(chan []Covid)
     finalValue := make(chan []Covid)
-    // Mapear
 
     for counter := 0; counter < numThreads; counter++ {
       if counter == numThreads - 1 {
@@ -493,12 +508,10 @@ func main() {
 
     // Reduce
     go Reducer_Select(lists, finalValue, inputs_select)
-
     // Esperar y cerrar canal
     wg.Wait()
     close(lists)
-    fmt.Println(<-finalValue)
-
+    outputWriter_Selection([]<-chan []Covid{finalValue})
   }
 
   if text == "PROJECTION"{
@@ -507,8 +520,6 @@ func main() {
 
     lists := make(chan [][]string)
     finalValue := make(chan [][]string)
-    // var wg sync.WaitGroup
-    //wg.Add(len(lines))
 
     inputs_projection := make([]string, 0)
     scanner.Scan()
@@ -520,7 +531,6 @@ func main() {
       COL_N := scanner.Text()
       inputs_projection = append(inputs_projection, COL_N)
     }
-
     //fmt.Println(lines[1 * (len(lines) / 2):])
     for counter := 0; counter < numThreads; counter++ {
       //fmt.Println("Hola")
@@ -589,39 +599,11 @@ func main() {
     }
 
     go Reduce_GA(lista_mapeo, finalValue, inputs_group)
-
     wg.Wait()
     close(lista_mapeo)
     outputWriter_GA([]<-chan map[string]float64{finalValue})
   }
-
-
-
-  //file, err := os.Create("result.csv")
-  //checkError("Cannot create file", err)
-  //defer file.Close()
-
-
-
-  // Guardamos resultado a CSV
-
-  //file, err := os.Create("result.csv")
-//  checkError("Cannot create file", err)
-  //defer file.Close()
-
-
-  //writer := csv.NewWriter(file)
-//  defer writer.Flush()
-
-  //fmt.Println(<-finalValue)
-//  for _, value := range <-finalValue {
-  //  fmt.Println(value)
-  //  err := writer.Write(value)
-  //  checkError("Cannot write to file", err)
-//  }
 }
-
-
 
 
 // Read CSV borrowed from https://stackoverflow.com/questions/24999079/reading-csv-file-in-go
